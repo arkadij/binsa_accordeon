@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <link href="style.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="gallery-wrap gallery-main">
+        <div class="item item-1"></div>
+        <div class="item item-2"></div>
+        <div class="item item-3"></div>
+        <div class="item item-4"></div>
+        <div class="item item-5"></div>
+      </div>
+      <div class="gallery-wrap gallery-buffer">
+        <div class="item item-1"></div>
+        <div class="item item-2"></div>
+        <div class="item item-3"></div>
+        <div class="item item-4"></div>
+        <div class="item item-5"></div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        let allImages = [];
+        let currentImages = [];
+        let currentIndex = 0;
+        let isFirstLoad = true;
+        let mainGallery = document.querySelector(".gallery-main");
+        let bufferGallery = document.querySelector(".gallery-buffer");
+        let galleryItems = mainGallery.querySelectorAll(".item");
+        let isSwapping = false;
+
+        // Set initial opacity values
+        mainGallery.style.opacity = "1";
+        bufferGallery.style.opacity = "0";
+
+        // Fetch the list of all image filenames from the server
+        fetch("/api/images")
+          .then((response) => response.json())
+          .then((images) => {
+            allImages = images.map((img) => ({ src: img, shown: false }));
+
+            const initialImages = allImages.slice(0, 5);
+            initialImages.forEach((imgObj) => (imgObj.shown = true));
+            currentImages = initialImages;
+
+            mainGallery.querySelectorAll(".item").forEach((item, index) => {
+              if (currentImages[index]) {
+                item.style.backgroundImage = `url('pics/original/${currentImages[index].src}')`;
+              }
+            });
+
+            loadNextImages(); // Preload the next set of images
+
+            isFirstLoad = false;
+            triggerHover(); // Start the animation sequence immediately
+          });
+
+        function preloadImages(imageArray) {
+          imageArray.forEach((imgObj) => {
+            const img = new Image();
+            img.src = `pics/original/${imgObj.src}`;
+          });
+        }
+
+        function loadNextImages() {
+          const unshownImages = allImages.filter((imgObj) => !imgObj.shown);
+
+          // Determine which gallery to load images into
+          const targetGallery = isFirstLoad ? mainGallery : bufferGallery;
+
+          bufferGallery.querySelectorAll(".item").forEach((item, index) => {
+            if (unshownImages[index]) {
+              item.style.backgroundImage = `url('pics/original/${unshownImages[index].src}')`;
+              unshownImages[index].shown = true;
+            }
+          });
+          // Load images into the target gallery
+          targetGallery.querySelectorAll(".item").forEach((item, index) => {
+            if (unshownImages[index]) {
+              item.style.backgroundImage = `url('pics/original/${unshownImages[index].src}')`;
+              unshownImages[index].shown = true;
+            }
+          });
+
+          // If all images have been shown, reset
+          if (
+            unshownImages.length <= 5 &&
+            allImages.some((imgObj) => imgObj.shown)
+          ) {
+            allImages.forEach((imgObj) => (imgObj.shown = false));
+          }
+
+          // Preload the next set of images after the current set
+          const nextToPreload = allImages
+            .filter((imgObj) => !imgObj.shown)
+            .slice(0, 5);
+          preloadImages(nextToPreload);
+
+          // Update the flag for the first load
+          if (isFirstLoad) {
+            isFirstLoad = false;
+          }
+        }
+
+        // Apply initial styles to gallery items
+        galleryItems.forEach((item, index) => {
+          item.style.transition = "flex 1.5s ease, filter 2s ease";
+          item.style.height = "100%";
+          item.style.backgroundPosition = "center";
+          item.style.backgroundSize = "cover";
+          item.style.backgroundRepeat = "none";
+          item.style.flex = "1";
+
+          // Apply filters based on index - even or odd
+          if (index % 2 === 0) {
+            item.style.filter = "grayscale(100%)";
+          } else {
+            item.style.filter =
+              "grayscale(100%) sepia(100%) contrast(100%) brightness(90%) saturate(350%) hue-rotate(14deg)";
+          }
+        });
+
+        function resetFlex(items) {
+          items.forEach((item, index) => {
+            item.style.flex = "1";
+            // Reapply the filter based on index
+            if (index % 2 === 0) {
+              item.style.filter = "grayscale(100%)";
+            } else {
+              item.style.filter =
+                "grayscale(100%) sepia(100%) contrast(100%) brightness(90%) saturate(350%) hue-rotate(14deg)";
+            }
+          });
+        }
+
+        function triggerHover() {
+          if (isSwapping) return;
+
+          // Always get the items from the mainGallery
+          const currentGalleryItems = mainGallery.querySelectorAll(".item");
+          
+          if (currentIndex < currentGalleryItems.length) {
+            resetFlex(currentGalleryItems); // Pass the currentGalleryItems here
+            const item = currentGalleryItems[currentIndex];
+            item.style.flex = "7";
+            item.style.filter = "none";
+
+            setTimeout(() => {
+              resetFlex(currentGalleryItems); // And here
+              currentIndex++;
+              triggerHover();
+            }, 4000);
+          } else {
+            isSwapping = true;
+            triggerGallerySwap();
+            currentIndex = 0;
+          }
+        }
+
+        function swapGalleries() {
+          let temp = mainGallery;
+          mainGallery = bufferGallery;
+          bufferGallery = temp;
+          galleryItems = mainGallery.querySelectorAll(".item"); // Update galleryItems to the new mainGallery
+        }
+
+        function fadeOutMainAndFadeInBuffer(callback) {
+          mainGallery.style.opacity = "0";
+          bufferGallery.style.opacity = "1";
+          setTimeout(callback, 2500); // Wait for the fade-out transition to complete
+        }
+
+        function triggerGallerySwap() {
+          loadNextImages(); // Load images for the new buffer
+          fadeOutMainAndFadeInBuffer(() => {
+            swapGalleries();
+            setTimeout(() => {
+              currentIndex = 0;
+              isSwapping = false;
+              triggerHover();
+            }, 2500);
+          });
+        }
+        // setInterval(triggerHover, 8000);
+      });
+    </script>
+  </body>
+</html>
